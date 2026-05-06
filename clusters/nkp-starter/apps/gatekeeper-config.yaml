@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatekeeper-custom-config
+  namespace: kommander
+data:
+  values.yaml: |
+    auditInterval: 300
+    auditMatch:
+      - excludedNamespaces:
+        - kube-system
+        - kommander
