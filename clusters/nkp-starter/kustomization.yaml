@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -9,3 +10,17 @@ patches:
       kind: AppDeployment
       name: gatekeeper
       namespace: kommander
+=======
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - apps/gatekeeper-config.yaml
+  - policies/require-labels-template.yaml
+  - policies/require-labels-constraint.yaml
+patches:
+  - path: apps/gatekeeper-patch.yaml
+    target:
+      kind: AppDeployment
+      name: gatekeeper
+      namespace: kommander
+>>>>>>> 2c420f790cabfdd7815a05aa1f6c0415c10e3e25
