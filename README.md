@@ -1,19 +1,22 @@
+
+
+
 # NKP GitOps & Gatekeeper Demo
 
 This repository demonstrates a best-practice GitOps workflow for managing Nutanix Kubernetes Platform (NKP) platform applications and Gatekeeper security policies using FluxCD and Kustomize.
 
 ## 🗂️ Repository Structure
 
-To solve Kubernetes "Chicken and Egg" race conditions, this repository is strictly organized into separate directories based on resource dependencies.
+To solve Kubernetes "Chicken and Egg" race conditions, this repository is strictly organized into separate directories based on resource dependencies. The root `kustomization.yaml` has been removed to prevent Flux from syncing everything simultaneously.
 
 ```text
 nkp-gitops-demo/
 ├── clusters/
 │   └── nkp-starter/
 │       ├── apps/
-│       │   ├── gatekeeper-config.yaml         # ConfigMap for Helm overrides
-│       │   ├── gatekeeper-patch.yaml          # AppDeployment Kustomize patch
-│       │   └── kustomization.yaml             # Kustomize entrypoint for apps
+│       │   ├── gatekeeper-config.yaml       # ConfigMap with Helm values
+│       │   ├── gatekeeper-patch.yaml        # AppDeployment patch
+│       │   └── kustomization.yaml           # Kustomize entrypoint (applies patch)
 │       ├── templates/
 │       │   ├── require-labels-template.yaml # Gatekeeper ConstraintTemplate (The Logic)
 │       │   └── kustomization.yaml           # Kustomize entrypoint for templates
@@ -25,10 +28,10 @@ nkp-gitops-demo/
 
 ### What do the files do?
 *   **`apps/gatekeeper-config.yaml`**: Contains a `ConfigMap` with our custom Helm values (e.g., `auditInterval: 300`).
-*   **`apps/gatekeeper-patch.yaml`**: A Kustomize patch targeting NKP's default Gatekeeper `AppDeployment`. This links the `ConfigMap` to the app, safely configuring the platform app *without* hardcoding or locking its version.
+*   **`apps/gatekeeper-patch.yaml`**: A Kustomize patch targeting NKP's default Gatekeeper `AppDeployment`. It safely injects the ConfigMap overrides *without* hardcoding or locking the application version, allowing NKP upgrades to proceed normally.
 *   **`templates/...`**: Contains Gatekeeper `ConstraintTemplates`. These contain the underlying Rego code (the logic) for our policies. When applied, Gatekeeper compiles them and dynamically creates new Kubernetes Custom Resource Definitions (CRDs).
 *   **`constraints/...`**: Contains Gatekeeper `Constraints`. These are the actual instantiations of the templates (e.g., "Require the `nkp-managed` label on all Namespaces").
-*   **`kustomization.yaml`**: Found in every directory. This is the "manifest" that tells Flux exactly which YAML files in that folder should be bundled together and applied to the cluster.
+*   **`kustomization.yaml`**: Found in every sub-directory. This is the "manifest" that tells Flux exactly which YAML files in that specific folder should be bundled together and applied to the cluster.
 
 ---
 
@@ -52,8 +55,8 @@ graph TD
         
         Templates -.->|Gatekeeper compiles CRD| GatekeeperEngine[🛡️ Gatekeeper Engine]
         
-        Templates -->|Wait for 'Ready' status| Constraints[🚧 Constraints Kustomization]
-        KustomizeController -->|3. Syncs (dependsOn)| Constraints
+        Templates -->|Wait for Ready status| Constraints[🚧 Constraints Kustomization]
+        KustomizeController -->|3. Syncs using dependsOn| Constraints
         Constraints -.->|Enforces Policy| GatekeeperEngine
     end
     
