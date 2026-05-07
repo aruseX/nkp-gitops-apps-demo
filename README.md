@@ -3,6 +3,28 @@
 
 # NKP GitOps & Gatekeeper Demo
 
+> ## ⚠️ Upgrade Disclaimer: Starter to Pro/Ultimate
+> This repository defines a GitOps pattern optimized for **NKP Starter**. If you plan to apply a license upgrade to **NKP Pro** or **NKP Ultimate**, please read this carefully.
+> 
+> **Will anything break if I upgrade?**
+> **Immediately? No.** Because we safely isolated your GitOps resources into the `nkp-user-gitops` namespace, the NKP upgrade engine will simply ignore them. Your cluster will not crash, and your Gatekeeper policies will remain active.
+> 
+> **However, long-term, it will cause a "Split-Brain" management problem.** NKP Pro and Ultimate introduce **Fleet Management** and **Workspaces**. In these tiers, GitOps is managed natively via the NKP UI/CLI at the Workspace level. If you leave this standalone Starter pattern running, your cluster will receive policy updates from a localized Flux deployment that the NKP Management UI knows nothing about. This causes configuration drift and constant overwrites if an admin tries to use the official Workspace GitOps method.
+> 
+> **The Fix:** Before or immediately after upgrading, delete the local `Kustomization` and `GitRepository` resources in the `nkp-user-gitops` namespace, and seamlessly migrate the repository connection to the official NKP Workspace.
+> 
+> **Why didn't we just use the `kommander-flux` namespace?**
+> If we had put our `GitRepository` and `Kustomization` manifests directly into NKP's native `kommander-flux` namespace, upgrading (or even applying a patch) could **break your cluster**.
+> 1. **The Pruning Reaper:** `kommander-flux` is strictly owned by NKP's lifecycle manager. During an upgrade, NKP reconciles that namespace. It will likely delete any unrecognized custom Flux resources, instantly severing your GitOps pipeline.
+> 2. **Resource Collisions:** Naming collisions could cause Flux controllers to hang or enter a crash loop, taking down NKP's ability to heal or upgrade core apps (Traefik, Dex, Gatekeeper).
+> 3. **AppDeployment Overwrites:** Managing the core `AppDeployment` directly without our safe "patching" method would result in NKP forcefully overwriting our changes and wiping out our custom settings.
+> 
+> *By using the `nkp-user-gitops` namespace, we successfully "piggyback" on the underlying Flux engine while maintaining total logical isolation from NKP's blast radius.*
+
+---
+
+## 📖 Overview
+
 This repository demonstrates a best-practice GitOps workflow for managing Nutanix Kubernetes Platform (NKP) platform applications and Gatekeeper security policies using FluxCD and Kustomize.
 
 ## 🗂️ Repository Structure
@@ -118,10 +140,34 @@ If you are cloning this repository to run on your own NKP cluster, follow these 
    flux create kustomization nkp-constraints-sync --source=GitRepository/nkp-infra-repo --path="./clusters/nkp-starter/constraints" --prune=true --interval=10m --depends-on=nkp-templates-sync --namespace=nkp-user-gitops
    ```
 
+---
+
 ## ✅ Verification
-Check that the policy is active by attempting to create a non-compliant namespace:
+
+### 1. Verify the GitOps Sync (FluxCD)
+To ensure Flux successfully pulled and applied your code, run the following commands:
+
 ```bash
+# View the status of all Flux Kustomizations
+flux get kustomization -n nkp-user-gitops
+
+# View the specific status and commit hash for the constraints sync
+flux get kustomization nkp-constraints-sync -n nkp-user-gitops
+
+# View the exact "receipt" (inventory) of Kubernetes objects Flux successfully created
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-constraints-sync -n nkp-user-gitops -o yaml | grep -A 15 "inventory:"
+```
+*(Note: Replace `nkp-constraints-sync` with `nkp-apps-sync` or `nkp-templates-sync` to check the inventory of the other directories).*
+
+### 2. Verify Gatekeeper Policy Enforcement
+Check that the policy is actively evaluating namespaces.
+
+```bash
+# View all existing namespaces and their current labels to see what is compliant/non-compliant
+kubectl get namespaces --show-labels
+
+# Test REJECTION: Attempt to create a non-compliant namespace
 kubectl create namespace test-bad-ns
-# Should return: Error from server (Forbidden): admission webhook "validation.gatekeeper.sh" denied the request...
+# EXPECTED: Error from server (Forbidden): admission webhook "validation.gatekeeper.sh" denied the request...
 ```
 
