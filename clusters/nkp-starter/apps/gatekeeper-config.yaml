@@ -10,3 +10,12 @@ data:
       - excludedNamespaces:
         - kube-system
         - kommander
+---
+apiVersion: apps.kommander.d2iq.io/v1alpha3
+kind: AppDeployment
+metadata:
+  name: gatekeeper
+  namespace: kommander
+spec:
+  configOverrides:
+    name: gatekeeper-custom-config
