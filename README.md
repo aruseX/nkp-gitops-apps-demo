@@ -159,6 +159,17 @@ kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-constraints-sync -n n
 ```
 *(Note: Replace `nkp-constraints-sync` with `nkp-apps-sync` or `nkp-templates-sync` to check the inventory of the other directories).*
 
+#### 🕵️ Interpreting the Output (What to look for)
+*   **READY: False**
+    If `flux get kustomization` shows `READY: False`, Flux hit an error and stopped executing. Look at the `MESSAGE` column; it will tell you exactly what failed (e.g., a YAML syntax error, or a missing CRD from a dry-run failure).
+*   **Mismatched Revisions (`lastAppliedRevision` vs `lastAttemptedRevision`)**
+    When checking the YAML output, you might see two different Git commit SHA hashes. 
+    *   `lastAttemptedRevision`: The newest commit Flux *tried* to apply.
+    *   `lastAppliedRevision`: The last commit Flux *successfully* applied. 
+    If these hashes do not match, it means your newest commit contains a breaking error! Flux safely halted the deployment and left your cluster in the last known good state.
+*   **Empty Inventory (`entries: []`)**
+    If the `inventory:` list is completely empty but Flux says `READY: True`, it means Flux found your directory but didn't deploy anything. This almost always means your `kustomization.yaml` file in that folder is missing, or you forgot to list your YAML files under the `resources:` block inside of it.
+
 ### 2. Verify Gatekeeper Policy Enforcement
 Check that the policy is actively evaluating namespaces.
 
