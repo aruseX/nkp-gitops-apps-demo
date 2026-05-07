@@ -2,3 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - gatekeeper-config.yaml
+patches:
+  - path: gatekeeper-patch.yaml
+    target:
+      kind: AppDeployment
+      name: gatekeeper
+      namespace: kommander
