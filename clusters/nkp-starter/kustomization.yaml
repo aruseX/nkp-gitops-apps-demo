@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - apps/gatekeeper-config.yaml
   - policies/require-labels-template.yaml
+  - policies/require-labels-constraint.yaml 
 patches:
   - path: apps/gatekeeper-patch.yaml
     target:
