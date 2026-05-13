@@ -133,7 +133,7 @@ If you are cloning this repository to run on your own NKP cluster, follow these 
    ```bash
    kubectl create namespace nkp-user-gitops
    flux create secret git github-auth --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --username=${GITHUB_USER} --password=${GITHUB_TOKEN} --namespace=nkp-user-gitops
-   flux create source git nkp-infra-repo --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --branch=main --secret-ref=github-auth --namespace=nkp-user-gitops
+   flux create source git nkp-apps-repo --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --branch=main --secret-ref=github-auth --namespace=nkp-user-gitops
    ```
 
 3. **Apply the Apps & Templates:**
@@ -148,34 +148,6 @@ If you are cloning this repository to run on your own NKP cluster, follow these 
    ```
 
 ---
-
-## Uninstall
-
-To remove your custom GitOps configurations and policies while leaving the base Gatekeeper installation running, follow these steps:
-
-**1. Remove Flux Kustomizations and Repositories**
-Delete the Kustomizations and GitRepository resources that manage your custom Gatekeeper policies through FluxCD. This will remove your policies but keep Gatekeeper active on the cluster:
-```bash
-kubectl delete kustomization nkp-apps-sync nkp-templates-sync nkp-constraints-sync -n nkp-user-gitops
-# Adjust the repository name below if yours is named differently
-kubectl delete gitrepository gatekeeper-policies-repo -n nkp-user-gitops
-```
-
-**2. Clean Up Configuration Overrides (Optional)**
-If you applied custom configuration overrides to the Gatekeeper installation and want to revert to the defaults, delete the ConfigMaps or Secrets:
-```bash
-kubectl delete configmap gatekeeper-overrides -n nkp-user-gitops
-# Or if a Secret was used:
-# kubectl delete secret gatekeeper-overrides -n nkp-user-gitops
-```
-
-**3. Verify Removal**
-Ensure that the Flux Kustomizations for apps, templates, and constraints have been successfully removed. Running these commands should return a "NotFound" error to confirm they are gone:
-```bash
-kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-apps-sync -n nkp-user-gitops
-kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-templates-sync -n nkp-user-gitops
-kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-constraints-sync -n nkp-user-gitops
-```
 
 ## ✅ Verification
 
@@ -217,3 +189,21 @@ kubectl create namespace test-bad-ns
 # EXPECTED: Error from server (Forbidden): admission webhook "validation.gatekeeper.sh" denied the request...
 ```
 
+---
+
+## Uninstall
+
+To remove your custom GitOps configurations and policies while leaving the base Gatekeeper installation running, follow these steps:
+
+**1. Remove Flux Kustomizations and Repositories**
+Delete the Kustomizations and GitRepository resources that manage your custom Gatekeeper policies through FluxCD. This will remove your policies but keep Gatekeeper active on the cluster:
+```bash
+kubectl delete kustomization nkp-apps-sync nkp-templates-sync nkp-constraints-sync -n nkp-user-gitops
+# Then, remove the repository source:
+kubectl delete gitrepository nkp-apps-repo -n nkp-user-gitops
+```
+
+**2.  Delete the Namespace (Optional) If the nkp-user-gitops namespace was created exclusively for this demo and you wish to completely clean up, you can delete the namespace. Warning: This will delete all other resources residing in this namespace:
+```bash
+kubectl delete namespace nkp-user-gitops
+```
