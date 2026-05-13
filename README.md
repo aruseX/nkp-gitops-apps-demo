@@ -27,6 +27,13 @@
 
 This repository demonstrates a best-practice GitOps workflow for managing Nutanix Kubernetes Platform (NKP) platform applications and Gatekeeper security policies using FluxCD and Kustomize.
 
+This README and the demo-runbook are meant to demonstrate how to build and recreate "this" repo for yourself. 
+I show you how to create this repo in your own environment and link it to you your custom installed flux.cd deployment (that NKP will ignore), and then use that configuration to make minor tweaks and usage of a NKP Starter application called OPA Gatekeeper. 
+
+I will use the files above, in the clusters folder, to test my steps with my application level gitops on NKP Starter, but my demo-runbook gives you the steps you will need to create the contents of the clusters folder in your own empty repo. 
+
+I always find that small iterative demos that provide a general intro to some of the more powerful things in a the smallest package possible to be the ones I like the most for getting started. 
+
 ## 🗂️ Repository Structure
 
 To solve Kubernetes "Chicken and Egg" race conditions, this repository is strictly organized into separate directories based on resource dependencies. The root `kustomization.yaml` has been removed to prevent Flux from syncing everything simultaneously.
