@@ -7,9 +7,9 @@ export GITHUB_TOKEN=""
 export GITHUB_USER="arusex"
 export REPO_NAME="nkp-gitops-demo"
 
-# NKP GitOps & Gatekeeper Runbook: Starter vs. Pro/Ultimate
+# NKP GitOps & Gatekeeper Runbook: Starter Environment
 
-This runbook details how to use GitOps to manage NKP `AppDeployments` (specifically for Gatekeeper Lifecycle Management) and Gatekeeper custom policies (`ConstraintTemplates` and `Constraints`).
+This runbook details how to use GitOps to manage NKP `AppDeployments` (specifically for Gatekeeper Lifecycle Management) and Gatekeeper custom policies (`ConstraintTemplates` and `Constraints`) within an NKP Starter environment.
 
 ### ⚠️ The Shift from Flux `dependsOn` to Helm Hooks
 To avoid the "Chicken and Egg" race condition where a Constraint fails to apply because its Template hasn't been compiled yet, we previously used Flux's `--depends-on` feature. That required splitting our manifests into separate `templates/` and `constraints/` folders and managing multiple sync jobs.
@@ -18,14 +18,15 @@ To avoid the "Chicken and Egg" race condition where a Constraint fails to apply 
 
 ---
 
-## Prerequisites (Both Paths)
-*   `kubectl` configured for your target cluster (Starter) or Management cluster (Pro/Ultimate).
+## Prerequisites
+*   An NKP Starter environment consisting of a Management cluster and Workload cluster(s).
+*   `kubectl` configured and pointing to your target **Workload Cluster** context (since Starter does not include Fleet Management, we apply these local GitOps resources directly to the cluster we want to manage).
 *   `flux` CLI installed (`curl -s https://fluxcd.io/install.sh | sudo bash`).
 *   A Git repository cloned locally in VSCode.
 
 ---
 
-## Path A: NKP Starter (Standalone Cluster)
+## Deploying to the Workload Cluster
 
 ### 1. Build the Git Repository Structure (Run in VSCode)
 Run these commands to generate the directories and manifests. Notice we leave the `apps/` directory intact and build a new Helm Chart for the Gatekeeper policies.
@@ -131,7 +132,7 @@ EOF
 Commit and push these files to your remote repository.
 
 ### 2. Configure the Flux Git Source & HelmRelease
-Set your credentials and wire Flux to your repository. Because we use a Helm Chart, we only need to sync the App patch via Kustomization and create a `HelmRelease` for the policies.
+Set your credentials and wire Flux to your repository. Ensure your `kubectl` context is set to your **Workload Cluster**. Because we use a Helm Chart, we only need to sync the App patch via Kustomization and create a `HelmRelease` for the policies.
 
 ```bash
 export GITHUB_TOKEN="<your-github-pat>"
@@ -184,75 +185,8 @@ EOF
 
 ---
 
-## Path B: NKP Pro & Ultimate (Fleet Management)
-In Pro/Ultimate, we apply the same structural approach, but target the Workspace namespace on the Management cluster.
-
-### 1. Build the Git Repository Structure (Run in VSCode)
-
-```bash
-export WORKSPACE_NS="ws-production"
-mkdir -p workspaces/${WORKSPACE_NS}/apps
-mkdir -p workspaces/${WORKSPACE_NS}/charts/nkp-gatekeeper-policies/templates
-
-# (Create the same apps files, Chart.yaml, and template/constraint YAMLs from Path A, 
-# but place them in the workspace directories)
-# Example: workspaces/ws-production/charts/nkp-gatekeeper-policies/templates/require-labels-template.yaml
-
-```
-Commit and push these files to your repository.
-
-### 2. Configure the Flux Git Source & Dependencies (On Management Cluster)
-
-```bash
-export GITHUB_TOKEN="<your-github-pat>"
-export GITHUB_USER="<your-github-username>"
-export REPO_NAME="nkp-gitops-infra"
-export WORKSPACE_NS="ws-production"
-
-flux create secret git github-auth \
-  --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
-  --username=${GITHUB_USER} \
-  --password=${GITHUB_TOKEN} \
-  --namespace=${WORKSPACE_NS}
-
-flux create source git workspace-gitops \
-  --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
-  --branch=unlicensedhelmrelease \
-  --secret-ref=github-auth \
-  --namespace=${WORKSPACE_NS}
-
-# 1. Sync the Apps
-flux create kustomization ws-apps-sync \
-  --source=GitRepository/workspace-gitops \
-  --path="./workspaces/${WORKSPACE_NS}/apps" \
-  --prune=true \
-  --interval=10m \
-  --namespace=${WORKSPACE_NS}
-
-# 2. Deploy the Helm Chart
-cat <<EOF | kubectl apply -f -
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
-kind: HelmRelease
-metadata:
-  name: nkp-gatekeeper-policies
-  namespace: ${WORKSPACE_NS}
-spec:
-  interval: 5m
-  chart:
-    spec:
-      chart: ./workspaces/${WORKSPACE_NS}/charts/nkp-gatekeeper-policies
-      sourceRef:
-        kind: GitRepository
-        name: workspace-gitops
-      interval: 1m
-EOF
-
-```
-
----
-
-## Verify the Gatekeeper Policy is Enforced (Both Paths)
-To prove the policy is working, run these tests (if on Pro/Ultimate, run against the Workload Cluster).
+## Verify the Gatekeeper Policy is Enforced
+To prove the policy is working on your workload cluster, run these tests.
 
 *Note on Existing Resources: Applying this policy will **not** break or delete existing namespaces that lack the label. Gatekeeper operates as an admission webhook that intercepts new `CREATE` or `UPDATE` requests. Existing non-compliant namespaces will continue to run normally, but will be flagged as violations in Gatekeeper's audit logs (which run every 5 minutes based on our `auditInterval` setting).*
 

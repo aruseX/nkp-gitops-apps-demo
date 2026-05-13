@@ -1,14 +1,15 @@
 # NKP GitOps & Gatekeeper Demo
 
 > ## ⚠️ Upgrade Disclaimer: Starter to Pro/Ultimate
-> This repository defines a GitOps pattern optimized for **NKP Starter**.
+> This repository defines a GitOps pattern optimized for **NKP Starter**. NKP Starter setups typically consist of a Management cluster and attached Workload clusters. Because Starter does not include Workspace Fleet Management, we apply these resources locally to the target cluster.
+> 
 > If you plan to apply a license upgrade to **NKP Pro** or **NKP Ultimate**, please read this carefully.
 >
 > **Will anything break if I upgrade? Immediately? No.** Because we safely isolated your GitOps resources into the `nkp-user-gitops` namespace, the NKP upgrade engine will simply ignore them. Your cluster will not crash, and your Gatekeeper policies will remain active.
 >
-> **However, long-term, it will cause a "Split-Brain" management problem.** NKP Pro and Ultimate introduce **Fleet Management** and **Workspaces**. In these tiers, GitOps is managed natively via the NKP UI/CLI at the Workspace level. If you leave this standalone Starter pattern running, your cluster will receive policy updates from a localized Flux deployment that the NKP Management UI knows nothing about. This causes configuration drift and constant overwrites if an admin tries to use the official Workspace GitOps method.
+> **However, long-term, it will cause a "Split-Brain" management problem.** NKP Pro and Ultimate introduce **Fleet Management** and **Workspaces**. In these tiers, GitOps is managed natively via the NKP UI/CLI at the Workspace level. If you leave this local Starter pattern running, your cluster will receive policy updates from a localized Flux deployment that the NKP Management UI knows nothing about. This causes configuration drift and constant overwrites if an admin tries to use the official Workspace GitOps method.
 >
-> **The Fix:** Before or immediately after upgrading, delete the local `Kustomization` and `GitRepository` resources in the `nkp-user-gitops` namespace, and seamlessly migrate the repository connection to the official NKP Workspace.
+> **The Fix:** Before or immediately after upgrading, delete the local `Kustomization` and `GitRepository` resources in the `nkp-user-gitops` namespace on your workload cluster, and seamlessly migrate the repository connection to the official NKP Workspace.
 >
 > **Why didn't we just use the `kommander-flux` namespace?**
 > If we had put our `GitRepository` and `Kustomization` manifests directly into NKP's native `kommander-flux` namespace, upgrading (or even applying a patch) could **break your cluster**.
@@ -23,7 +24,7 @@
 ## 📖 Overview
 This repository demonstrates a best-practice GitOps workflow for managing Nutanix Kubernetes Platform (NKP) platform applications and Gatekeeper security policies using FluxCD and Kustomize.
 
-I show you how to create this repo in your own environment and link it to your custom installed flux.cd deployment (that NKP will ignore), and then use that configuration to make minor tweaks and usage of an NKP Starter application called OPA Gatekeeper.
+I show you how to create this repo in your own environment and link it to your custom installed flux.cd deployment (that NKP will ignore), and then use that configuration to make minor tweaks and usage of an NKP Starter application called OPA Gatekeeper on your Workload cluster.
 
 ### ⚠️ Why We Moved to Helm (From Flux `dependsOn`)
 Gatekeeper policies introduce a classic **"Chicken and Egg" problem**:
@@ -64,12 +65,12 @@ nkp-gitops-demo/
 ---
 
 ## 🏗️ Architecture & GitOps Workflow
-Below is the workflow of how code moves from this repository into the NKP cluster, utilizing FluxCD's controllers and Helm.
+Below is the workflow of how code moves from this repository into the NKP Workload cluster, utilizing FluxCD's controllers and Helm.
 
 ```mermaid
 graph TD
 Developer[👨‍💻 Developer] -->|git commit & push| GitRepo[(🐙 GitHub Repo: nkp-gitops-demo)]
-subgraph "NKP Cluster (FluxCD Controllers)"
+subgraph "NKP Workload Cluster (FluxCD Controllers)"
 SourceController[🔄 Source Controller]
 HelmController[⚙️ Helm Controller]
 KustomizeController[🔧 Kustomize Controller]
@@ -89,7 +90,7 @@ end
 
 ## 🚀 Getting Started
 
-If you are cloning this repository to run on your own NKP cluster, follow these steps to bootstrap the Flux configuration:
+If you are cloning this repository to run on your own NKP cluster, follow these steps to bootstrap the Flux configuration directly onto your target Workload cluster:
 
 1. **Set your credentials:**
 
@@ -149,7 +150,7 @@ Once the `HelmRelease` is deployed, verify the policies are correctly applied:
 
    ```
 
-### Teardown (Optional)
+### Teardown
 To remove the customizations and uninstall the Helm chart, delete the GitOps resources. Flux and Helm will automatically clean up the policies:
 
 ```bash
@@ -157,4 +158,5 @@ kubectl delete helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
 kubectl delete kustomization nkp-apps-sync -n nkp-user-gitops
 kubectl delete gitrepository nkp-apps-repo -n nkp-user-gitops
 kubectl delete namespace nkp-user-gitops
+
 ```
