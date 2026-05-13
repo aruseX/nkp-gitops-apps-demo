@@ -257,12 +257,13 @@ To prove the policy is working, run these tests (if on Pro/Ultimate, run against
 *Note on Existing Resources: Applying this policy will **not** break or delete existing namespaces that lack the label. Gatekeeper operates as an admission webhook that intercepts new `CREATE` or `UPDATE` requests. Existing non-compliant namespaces will continue to run normally, but will be flagged as violations in Gatekeeper's audit logs (which run every 5 minutes based on our `auditInterval` setting).*
 
 ```bash
-# 1. View all namespaces and their current labels to see what is compliant/non-compliant
-kubectl get namespaces --show-labels
+# 1. Check the status of the Flux HelmRelease
+kubectl get helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
+# EXPECTED: Ready status should be True.
 
 # 2. Verify the custom resources exist on the cluster
-kubectl get constrainttemplates
-kubectl get k8srequiredlabels
+kubectl get constrainttemplates k8srequiredlabels
+kubectl get k8srequiredlabels ns-must-have-nkp-managed
 
 # 3. Test REJECTION: Try to create a namespace WITHOUT the required label
 kubectl create namespace test-bad-ns
@@ -283,18 +284,31 @@ EOF
 # This will show you a list of all those existing namespaces that are currently violating the policy
 kubectl describe k8srequiredlabels ns-must-have-nkp-managed
 
-# 6. Clean up
-kubectl delete namespace test-good-ns
-
 ```
 
 ---
 
-## Troubleshooting: The Chicken-and-Egg CRD Race Condition
+## Uninstall & Teardown
 
-**Historical Context (`dependsOn` vs Helm):**
-In older versions of this repository, you might have seen a `dry-run failed: no matches for kind "X"` error. This happened because Flux tried to validate a Gatekeeper `Constraint` before Gatekeeper finished compiling the `ConstraintTemplate`.
+Because we deployed this using GitOps, deleting the manual test resources and removing the Flux configuration will instruct the cluster to automatically clean up the Helm release and policy engine artifacts.
 
-We used to solve this by splitting directories and using Flux's `--depends-on`. However, **by moving to Helm Hooks (as shown above), this race condition is solved natively within the Helm Controller.**
+```bash
+# 1. Clean up manual test namespaces
+kubectl delete namespace test-good-ns
 
-If you still encounter timing issues, check your `HelmRelease` logs (`kubectl logs -n flux-system deployment/helm-controller`) to ensure the `pre-install` hook successfully ran and applied the `ConstraintTemplate` with the negative weight prior to standard resource execution.
+# 2. Remove the Flux HelmRelease
+# (This signals Helm to uninstall the release, which deletes the Constraint and ConstraintTemplate)
+kubectl delete helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
+
+# 3. Remove the Flux App Kustomization
+# (This un-patches Gatekeeper, returning it to default settings)
+kubectl delete kustomization nkp-apps-sync -n nkp-user-gitops
+
+# 4. Remove the Git Source and Secret
+kubectl delete gitrepository nkp-infra-repo -n nkp-user-gitops
+kubectl delete secret github-auth -n nkp-user-gitops
+
+# 5. Delete the namespace
+kubectl delete namespace nkp-user-gitops
+
+```

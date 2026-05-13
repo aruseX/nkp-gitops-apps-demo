@@ -124,5 +124,37 @@ Create a `HelmRelease` that points to the chart path in your repository. Flux wi
 
 ---
 
-## ✅ Verification
-*(Verification steps remain the same: check `kubectl get constrainttemplates`, `kubectl get k8srequiredlabels`, and test creating a non-compliant namespace).*
+## ✅ Verification & Uninstall
+
+Once the `HelmRelease` is deployed, verify the policies are correctly applied:
+
+1. **Check Flux HelmRelease status:**
+
+   ```bash
+   kubectl get helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
+
+   ```
+2. **Verify Gatekeeper Resources:**
+
+   ```bash
+   kubectl get constrainttemplates k8srequiredlabels
+   kubectl get k8srequiredlabels ns-must-have-nkp-managed
+
+   ```
+3. **Test the Enforcement (Rejection):**
+
+   ```bash
+   kubectl create namespace missing-label-test
+   # Expected: Error from server (Forbidden) ... validation.gatekeeper.sh denied the request.
+
+   ```
+
+### Teardown (Optional)
+To remove the customizations and uninstall the Helm chart, delete the GitOps resources. Flux and Helm will automatically clean up the policies:
+
+```bash
+kubectl delete helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
+kubectl delete kustomization nkp-apps-sync -n nkp-user-gitops
+kubectl delete gitrepository nkp-apps-repo -n nkp-user-gitops
+kubectl delete namespace nkp-user-gitops
+```
