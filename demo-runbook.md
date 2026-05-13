@@ -3,9 +3,12 @@
 ## Create a file in your root with these variables setup for use when running this repo from your bastion and doing operations
 I have reserved .env* in the .gitignore for this use
 >cat .env
+```bash
 export GITHUB_TOKEN=""
 export GITHUB_USER="arusex"
 export REPO_NAME="nkp-gitops-demo"
+export TARGET_BRANCH="unlicensedhelmrelease/v1.0"
+```
 
 # NKP GitOps & Gatekeeper Runbook: Starter Environment
 
@@ -137,7 +140,9 @@ Set your credentials and wire Flux to your repository. Ensure your `kubectl` con
 ```bash
 export GITHUB_TOKEN="<your-github-pat>"
 export GITHUB_USER="<your-github-username>"
-export REPO_NAME="nkp-gitops-infra"
+export REPO_NAME="nkp-gitops-apps-demo"
+export TARGET_BRANCH="unlicensedhelmrelease/v1.0"
+```
 
 kubectl create namespace nkp-user-gitops
 
@@ -148,15 +153,15 @@ flux create secret git github-auth \
   --password=${GITHUB_TOKEN} \
   --namespace=nkp-user-gitops
 
-flux create source git nkp-infra-repo \
+flux create source git nkp-apps-repo \
   --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
-  --branch=unlicensedhelmrelease \
+  --branch=${TARGET_BRANCH} \
   --secret-ref=github-auth \
   --namespace=nkp-user-gitops
 
 # 1. Sync the Apps
 flux create kustomization nkp-apps-sync \
-  --source=GitRepository/nkp-infra-repo \
+  --source=GitRepository/nkp-apps-repo \
   --path="./clusters/nkp-starter/apps" \
   --prune=true \
   --interval=10m \
@@ -239,7 +244,7 @@ kubectl delete helmrelease nkp-gatekeeper-policies -n nkp-user-gitops
 kubectl delete kustomization nkp-apps-sync -n nkp-user-gitops
 
 # 4. Remove the Git Source and Secret
-kubectl delete gitrepository nkp-infra-repo -n nkp-user-gitops
+kubectl delete gitrepository nkp-apps-repo -n nkp-user-gitops
 kubectl delete secret github-auth -n nkp-user-gitops
 
 # 5. Delete the namespace

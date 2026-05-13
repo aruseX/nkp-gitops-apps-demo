@@ -98,7 +98,7 @@ If you are cloning this repository to run on your own NKP cluster, follow these 
 export GITHUB_TOKEN="<your-pat>"
 export GITHUB_USER="<your-username>"
 export REPO_NAME="nkp-gitops-demo"
-
+export TARGET_BRANCH="unlicensedhelmrelease/v1.0"
 ```
 
 2. **Create the Git Source:**
@@ -108,7 +108,7 @@ kubectl create namespace nkp-user-gitops
 
 flux create secret git github-auth --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --username=${GITHUB_USER} --password=${GITHUB_TOKEN} --namespace=nkp-user-gitops
 
-flux create source git nkp-apps-repo --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --branch=unlicensedhelmrelease --secret-ref=github-auth --namespace=nkp-user-gitops
+flux create source git nkp-apps-repo --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --branch=${TARGET_BRANCH} --secret-ref=github-auth --namespace=nkp-user-gitops
 
 ```
 
