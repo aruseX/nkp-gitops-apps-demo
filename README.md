@@ -149,6 +149,34 @@ If you are cloning this repository to run on your own NKP cluster, follow these 
 
 ---
 
+## Uninstall
+
+To remove your custom GitOps configurations and policies while leaving the base Gatekeeper installation running, follow these steps:
+
+**1. Remove Flux Kustomizations and Repositories**
+Delete the Kustomizations and GitRepository resources that manage your custom Gatekeeper policies through FluxCD. This will remove your policies but keep Gatekeeper active on the cluster:
+```bash
+kubectl delete kustomization nkp-apps-sync nkp-templates-sync nkp-constraints-sync -n nkp-user-gitops
+# Adjust the repository name below if yours is named differently
+kubectl delete gitrepository gatekeeper-policies-repo -n nkp-user-gitops
+```
+
+**2. Clean Up Configuration Overrides (Optional)**
+If you applied custom configuration overrides to the Gatekeeper installation and want to revert to the defaults, delete the ConfigMaps or Secrets:
+```bash
+kubectl delete configmap gatekeeper-overrides -n nkp-user-gitops
+# Or if a Secret was used:
+# kubectl delete secret gatekeeper-overrides -n nkp-user-gitops
+```
+
+**3. Verify Removal**
+Ensure that the Flux Kustomizations for apps, templates, and constraints have been successfully removed. Running these commands should return a "NotFound" error to confirm they are gone:
+```bash
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-apps-sync -n nkp-user-gitops
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-templates-sync -n nkp-user-gitops
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io nkp-constraints-sync -n nkp-user-gitops
+```
+
 ## ✅ Verification
 
 ### 1. Verify the GitOps Sync (FluxCD)
