@@ -1,6 +1,6 @@
 # nkp-gitops-demo
 
-## Create a file in your root with these variables setup for use when running this repo from you bastion and doing operations
+## Create a file in your root with these variables setup for use when running this repo from your bastion and doing operations
 I have reserved .env* in the .gitignore for this use
 >cat .env
 export GITHUB_TOKEN=""
@@ -9,9 +9,12 @@ export REPO_NAME="nkp-gitops-demo"
 
 # NKP GitOps & Gatekeeper Runbook: Starter vs. Pro/Ultimate
 
-This runbook details how to use GitOps (FluxCD) to manage NKP `AppDeployments` (specifically for Gatekeeper Lifecycle Management) and Gatekeeper custom policies (`ConstraintTemplates` and `Constraints`). 
+This runbook details how to use GitOps to manage NKP `AppDeployments` (specifically for Gatekeeper Lifecycle Management) and Gatekeeper custom policies (`ConstraintTemplates` and `Constraints`).
 
-To avoid the "Chicken and Egg" race condition where a Constraint fails to apply because its Template hasn't been compiled yet, this guide separates Templates and Constraints into different directories and uses Flux's `dependsOn` feature to enforce a strict order of operations.
+### ⚠️ The Shift from Flux `dependsOn` to Helm Hooks
+To avoid the "Chicken and Egg" race condition where a Constraint fails to apply because its Template hasn't been compiled yet, we previously used Flux's `--depends-on` feature. That required splitting our manifests into separate `templates/` and `constraints/` folders and managing multiple sync jobs.
+
+**We have now consolidated our policies into a single Helm Chart.** We use Helm hooks (`"helm.sh/hook": pre-install, pre-upgrade` and a negative weight of `"-5"`) on our `ConstraintTemplates`. This ensures Helm pushes the template to the cluster and waits for Gatekeeper to compile the CRD *before* it attempts to deploy the `Constraint`.
 
 ---
 
@@ -25,14 +28,12 @@ To avoid the "Chicken and Egg" race condition where a Constraint fails to apply 
 ## Path A: NKP Starter (Standalone Cluster)
 
 ### 1. Build the Git Repository Structure (Run in VSCode)
-
-Run these commands to generate the directories and manifests. Notice we now use separate `templates` and `constraints` folders.
+Run these commands to generate the directories and manifests. Notice we leave the `apps/` directory intact and build a new Helm Chart for the Gatekeeper policies.
 
 ```bash
-# Create distinct directories for ordering
+# Create distinct directories for apps and charts
 mkdir -p clusters/nkp-starter/apps
-mkdir -p clusters/nkp-starter/templates
-mkdir -p clusters/nkp-starter/constraints
+mkdir -p clusters/nkp-starter/charts/nkp-gatekeeper-policies/templates
 
 # 1. Create the ConfigMap & Patch for Gatekeeper AppDeployment
 cat << 'EOF' > clusters/nkp-starter/apps/gatekeeper-config.yaml
@@ -59,12 +60,32 @@ spec:
     name: gatekeeper-custom-config
 EOF
 
-# 2. Create the Gatekeeper ConstraintTemplate
-cat << 'EOF' > clusters/nkp-starter/templates/require-labels-template.yaml
+cat << 'EOF' > clusters/nkp-starter/apps/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gatekeeper-config.yaml
+EOF
+
+# 2. Build the Helm Chart Core Files
+cat << 'EOF' > clusters/nkp-starter/charts/nkp-gatekeeper-policies/Chart.yaml
+apiVersion: v2
+name: nkp-gatekeeper-policies
+description: A Helm chart for Gatekeeper constraints and templates
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+EOF
+
+# 3. Create the Gatekeeper ConstraintTemplate (WITH HELM HOOKS)
+cat << 'EOF' > clusters/nkp-starter/charts/nkp-gatekeeper-policies/templates/require-labels-template.yaml
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8srequiredlabels
+  annotations:
+    "helm.sh/hook": pre-install, pre-upgrade
+    "helm.sh/hook-weight": "-5"
 spec:
   crd:
     spec:
@@ -90,8 +111,8 @@ spec:
         }
 EOF
 
-# 3. Create the Gatekeeper Constraint
-cat << 'EOF' > clusters/nkp-starter/constraints/require-labels-constraint.yaml
+# 4. Create the Gatekeeper Constraint
+cat << 'EOF' > clusters/nkp-starter/charts/nkp-gatekeeper-policies/templates/require-labels-constraint.yaml
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequiredLabels
 metadata:
@@ -106,34 +127,11 @@ spec:
       - "nkp-managed"
 EOF
 
-# 4. Create individual kustomization.yaml files for each folder
-cat << 'EOF' > clusters/nkp-starter/apps/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - gatekeeper-config.yaml
-EOF
-
-cat << 'EOF' > clusters/nkp-starter/templates/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - require-labels-template.yaml
-EOF
-
-cat << 'EOF' > clusters/nkp-starter/constraints/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - require-labels-constraint.yaml
-EOF
 ```
-
 Commit and push these files to your remote repository.
 
-### 2. Configure the Flux Git Source & Dependencies
-
-Set your credentials and wire Flux to your repository. We will create TWO Kustomizations and link them with `--depends-on`.
+### 2. Configure the Flux Git Source & HelmRelease
+Set your credentials and wire Flux to your repository. Because we use a Helm Chart, we only need to sync the App patch via Kustomization and create a `HelmRelease` for the policies.
 
 ```bash
 export GITHUB_TOKEN="<your-github-pat>"
@@ -151,70 +149,56 @@ flux create secret git github-auth \
 
 flux create source git nkp-infra-repo \
   --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
-  --branch=main \
+  --branch=unlicensedhelmrelease \
   --secret-ref=github-auth \
   --namespace=nkp-user-gitops
 
-# 1. Sync the Apps & Templates FIRST
-flux create kustomization nkp-templates-sync \
+# 1. Sync the Apps
+flux create kustomization nkp-apps-sync \
   --source=GitRepository/nkp-infra-repo \
-  --path="./clusters/nkp-starter/templates" \
+  --path="./clusters/nkp-starter/apps" \
   --prune=true \
   --interval=10m \
   --namespace=nkp-user-gitops
 
-# 2. Sync the Constraints (Depends on Templates)
-flux create kustomization nkp-constraints-sync \
-  --source=GitRepository/nkp-infra-repo \
-  --path="./clusters/nkp-starter/constraints" \
-  --prune=true \
-  --interval=10m \
-  --depends-on=nkp-templates-sync \
-  --namespace=nkp-user-gitops
+# 2. Deploy the Helm Chart
+cat <<EOF | kubectl apply -f -
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: nkp-gatekeeper-policies
+  namespace: nkp-user-gitops
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./clusters/nkp-starter/charts/nkp-gatekeeper-policies
+      sourceRef:
+        kind: GitRepository
+        name: nkp-infra-repo
+      interval: 1m
+EOF
+
 ```
-*Note: Because of `--depends-on`, Flux will not even attempt a dry-run on the constraints until `nkp-templates-sync` reports a healthy, finished status!*
+*Note: Because of the Helm hooks, Flux will pass the chart to the Helm controller, which natively applies the Template, waits for it to be ready, and then applies the Constraint!*
 
 ---
 
 ## Path B: NKP Pro & Ultimate (Fleet Management)
-
-In Pro/Ultimate, we apply the same structural split, but target the Workspace namespace on the Management cluster.
+In Pro/Ultimate, we apply the same structural approach, but target the Workspace namespace on the Management cluster.
 
 ### 1. Build the Git Repository Structure (Run in VSCode)
 
 ```bash
 export WORKSPACE_NS="ws-production"
-
 mkdir -p workspaces/${WORKSPACE_NS}/apps
-mkdir -p workspaces/${WORKSPACE_NS}/templates
-mkdir -p workspaces/${WORKSPACE_NS}/constraints
+mkdir -p workspaces/${WORKSPACE_NS}/charts/nkp-gatekeeper-policies/templates
 
-# (Create the same 3 YAML files from Path A, but place them in the workspace directories)
-# Example: workspaces/ws-production/templates/require-labels-template.yaml
+# (Create the same apps files, Chart.yaml, and template/constraint YAMLs from Path A, 
+# but place them in the workspace directories)
+# Example: workspaces/ws-production/charts/nkp-gatekeeper-policies/templates/require-labels-template.yaml
 
-# Create individual kustomization.yaml files for each folder
-cat << EOF > workspaces/${WORKSPACE_NS}/apps/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - gatekeeper-config.yaml
-EOF
-
-cat << EOF > workspaces/${WORKSPACE_NS}/templates/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - require-labels-template.yaml
-EOF
-
-cat << EOF > workspaces/${WORKSPACE_NS}/constraints/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - require-labels-constraint.yaml
-EOF
 ```
-
 Commit and push these files to your repository.
 
 ### 2. Configure the Flux Git Source & Dependencies (On Management Cluster)
@@ -233,32 +217,41 @@ flux create secret git github-auth \
 
 flux create source git workspace-gitops \
   --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
-  --branch=main \
+  --branch=unlicensedhelmrelease \
   --secret-ref=github-auth \
   --namespace=${WORKSPACE_NS}
 
-# 1. Sync the Templates FIRST
-flux create kustomization ws-templates-sync \
+# 1. Sync the Apps
+flux create kustomization ws-apps-sync \
   --source=GitRepository/workspace-gitops \
-  --path="./workspaces/${WORKSPACE_NS}/templates" \
+  --path="./workspaces/${WORKSPACE_NS}/apps" \
   --prune=true \
   --interval=10m \
   --namespace=${WORKSPACE_NS}
 
-# 2. Sync the Constraints (Depends on Templates)
-flux create kustomization ws-constraints-sync \
-  --source=GitRepository/workspace-gitops \
-  --path="./workspaces/${WORKSPACE_NS}/constraints" \
-  --prune=true \
-  --interval=10m \
-  --depends-on=ws-templates-sync \
-  --namespace=${WORKSPACE_NS}
+# 2. Deploy the Helm Chart
+cat <<EOF | kubectl apply -f -
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: nkp-gatekeeper-policies
+  namespace: ${WORKSPACE_NS}
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./workspaces/${WORKSPACE_NS}/charts/nkp-gatekeeper-policies
+      sourceRef:
+        kind: GitRepository
+        name: workspace-gitops
+      interval: 1m
+EOF
+
 ```
 
 ---
 
 ## Verify the Gatekeeper Policy is Enforced (Both Paths)
-
 To prove the policy is working, run these tests (if on Pro/Ultimate, run against the Workload Cluster).
 
 *Note on Existing Resources: Applying this policy will **not** break or delete existing namespaces that lack the label. Gatekeeper operates as an admission webhook that intercepts new `CREATE` or `UPDATE` requests. Existing non-compliant namespaces will continue to run normally, but will be flagged as violations in Gatekeeper's audit logs (which run every 5 minutes based on our `auditInterval` setting).*
@@ -292,36 +285,16 @@ kubectl describe k8srequiredlabels ns-must-have-nkp-managed
 
 # 6. Clean up
 kubectl delete namespace test-good-ns
+
 ```
 
 ---
 
 ## Troubleshooting: The Chicken-and-Egg CRD Race Condition
 
-**Symptom:** 
-You run `flux get kustomization -n <namespace>` and see the following error:
-`dry-run failed: no matches for kind "X" in version "constraints.gatekeeper.sh/v1beta1"`
+**Historical Context (`dependsOn` vs Helm):**
+In older versions of this repository, you might have seen a `dry-run failed: no matches for kind "X"` error. This happened because Flux tried to validate a Gatekeeper `Constraint` before Gatekeeper finished compiling the `ConstraintTemplate`.
 
-**Cause:**
-This happens when Flux tries to validate a Gatekeeper `Constraint` before Gatekeeper has finished compiling the corresponding `ConstraintTemplate` (which registers the CRD with the Kubernetes API). 
+We used to solve this by splitting directories and using Flux's `--depends-on`. However, **by moving to Helm Hooks (as shown above), this race condition is solved natively within the Helm Controller.**
 
-**The Quick Fix (Without modifying Git):**
-You can manually "prime" the Kubernetes API server by applying the template directly via `kubectl`. This creates the CRD so Flux's dry-run succeeds on its next attempt.
-
-1. Apply the template directly from your local repository:
-   ```bash
-   kubectl apply -f clusters/nkp-starter/templates/require-labels-template.yaml
-   ```
-2. Wait 10 seconds for Gatekeeper to compile it.
-3. Force Flux to retry the sync:
-   ```bash
-   flux reconcile kustomization nkp-constraints-sync -n nkp-user-gitops --with-source
-   ```
-
-**The Long-Term Fix:**
-Separate your policies into two distinct directories (`templates` and `constraints`) and use the Flux `--depends-on` flag when creating the Kustomizations (as shown in the main runbook steps). This guarantees Flux will always wait for templates to fully deploy before attempting to validate constraints.
-
-
-
-
-#
+If you still encounter timing issues, check your `HelmRelease` logs (`kubectl logs -n flux-system deployment/helm-controller`) to ensure the `pre-install` hook successfully ran and applied the `ConstraintTemplate` with the negative weight prior to standard resource execution.

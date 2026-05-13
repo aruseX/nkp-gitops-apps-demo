@@ -23,7 +23,7 @@
 ## 📖 Overview
 This repository demonstrates a best-practice GitOps workflow for managing Nutanix Kubernetes Platform (NKP) platform applications and Gatekeeper security policies using FluxCD and Kustomize.
 
-I show you how to create this repo in your own environment and link it to you your custom installed flux.cd deployment (that NKP will ignore), and then use that configuration to make minor tweaks and usage of an NKP Starter application called OPA Gatekeeper.
+I show you how to create this repo in your own environment and link it to your custom installed flux.cd deployment (that NKP will ignore), and then use that configuration to make minor tweaks and usage of an NKP Starter application called OPA Gatekeeper.
 
 ### ⚠️ Why We Moved to Helm (From Flux `dependsOn`)
 Gatekeeper policies introduce a classic **"Chicken and Egg" problem**:
@@ -38,4 +38,91 @@ Gatekeeper policies introduce a classic **"Chicken and Egg" problem**:
 
 ## 🗂️ Repository Structure
 
-Because we are using Helm, our repository is strictly organized into a standard chart structure, consolidating our application patches and policies.
+Because we are using Helm for the policies (while keeping Kustomize for the NKP AppDeployments), our repository is strictly organized to handle both correctly:
+
+```text
+nkp-gitops-demo/
+├── clusters/
+│   └── nkp-starter/
+│       ├── apps/
+│       │   ├── gatekeeper-config.yaml       # ConfigMap with custom values
+│       │   └── kustomization.yaml           # Kustomize entrypoint (applies patch)
+│       └── charts/
+│           └── nkp-gatekeeper-policies/     # Our new consolidated Helm Chart
+│               ├── Chart.yaml
+│               └── templates/
+│                   ├── require-labels-template.yaml   # ConstraintTemplate (Hooked)
+│                   └── require-labels-constraint.yaml # Constraint (Standard)
+└── README.md
+
+```
+
+### What do the files do?
+*   **`apps/gatekeeper-config.yaml` & `kustomization.yaml`**: Injects a `configOverrides` block into NKP's default Gatekeeper `AppDeployment` to change settings without hardcoding application versions.
+*   **`charts/nkp-gatekeeper-policies/`**: A self-contained Helm chart containing both our `ConstraintTemplates` (the logic) and `Constraints` (the enforcement). Helm's internal hook engine safely manages the deployment order.
+
+---
+
+## 🏗️ Architecture & GitOps Workflow
+Below is the workflow of how code moves from this repository into the NKP cluster, utilizing FluxCD's controllers and Helm.
+
+```mermaid
+graph TD
+Developer[👨‍💻 Developer] -->|git commit & push| GitRepo[(🐙 GitHub Repo: nkp-gitops-demo)]
+subgraph "NKP Cluster (FluxCD Controllers)"
+SourceController[🔄 Source Controller]
+HelmController[⚙️ Helm Controller]
+KustomizeController[🔧 Kustomize Controller]
+GitRepo -->|Pulls every 10m| SourceController
+SourceController -->|Provides source code| HelmController
+SourceController -->|Provides source code| KustomizeController
+KustomizeController -->|Syncs AppDeployment| Apps[Gatekeeper App Config]
+HelmController -->|1. Executes pre-install Hook| Templates[📄 ConstraintTemplate]
+Templates -.->|Gatekeeper compiles CRD| GatekeeperEngine[🛡️ Gatekeeper Engine]
+HelmController -->|2. Deploys standard resources| Constraints[🚧 Constraints]
+Constraints -.->|Enforces Policy| GatekeeperEngine
+end
+
+```
+
+---
+
+## 🚀 Getting Started
+
+If you are cloning this repository to run on your own NKP cluster, follow these steps to bootstrap the Flux configuration:
+
+1. **Set your credentials:**
+
+```bash
+export GITHUB_TOKEN="<your-pat>"
+export GITHUB_USER="<your-username>"
+export REPO_NAME="nkp-gitops-demo"
+
+```
+
+2. **Create the Git Source:**
+
+```bash
+kubectl create namespace nkp-user-gitops
+
+flux create secret git github-auth --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --username=${GITHUB_USER} --password=${GITHUB_TOKEN} --namespace=nkp-user-gitops
+
+flux create source git nkp-apps-repo --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git --branch=unlicensedhelmrelease --secret-ref=github-auth --namespace=nkp-user-gitops
+
+```
+
+3. **Apply the Apps Patch:**
+
+```bash
+flux create kustomization nkp-apps-sync --source=GitRepository/nkp-apps-repo --path="./clusters/nkp-starter/apps" --prune=true --interval=10m --namespace=nkp-user-gitops
+
+```
+
+4. **Deploy the Helm Chart (via Flux HelmRelease):**
+Create a `HelmRelease` that points to the chart path in your repository. Flux will pass this to the Helm Controller, which natively respects the pre-install hooks.
+*(See `demo-runbook.md` for specific implementation steps).*
+
+---
+
+## ✅ Verification
+*(Verification steps remain the same: check `kubectl get constrainttemplates`, `kubectl get k8srequiredlabels`, and test creating a non-compliant namespace).*
