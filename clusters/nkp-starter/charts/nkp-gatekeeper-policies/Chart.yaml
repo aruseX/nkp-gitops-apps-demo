@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nkp-gatekeeper-policies
+description: A Helm chart for Gatekeeper constraints and templates
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
