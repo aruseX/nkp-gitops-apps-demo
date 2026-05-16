@@ -26,7 +26,7 @@ I have reserved .env* in the .gitignore for this use
 export GITHUB_TOKEN="<your-github-pat>"
 export GITHUB_USER="<your-github-username>"
 export REPO_NAME="nkp-gitops-demo"
-export TARGET_BRANCH="apps-federation-pro-ult/v1.0"
+export TARGET_BRANCH="infra-pro-ult/v1.0"
 ```
 
 ### 2. Bootstrap Flux and Create Git Source
