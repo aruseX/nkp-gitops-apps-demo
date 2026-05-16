@@ -1,0 +1,12 @@
+apiVersion: workspaces.kommander.mesosphere.io/v1alpha1
+kind: Project
+metadata:
+  name: backend-team
+  namespace: production-fleet
+spec:
+  workspaceRef:
+    name: production-fleet
+  placement:
+    clusterSelector:
+      matchLabels:
+        environment: production

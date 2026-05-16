@@ -1,14 +1,15 @@
-# NKP Infrastructure GitOps Runbook (Pro/Ultimate License)
+# NKP Platform Tenancy GitOps Runbook
 
 ## 📖 Overview
-This runbook guides an NKP Platform Administrator through using GitOps (FluxCD) to manage fleets of clusters using **NKP Pro or Ultimate**. 
+This runbook guides a Platform Administrator through using GitOps to create **Projects** across a fleet of NKP clusters. 
 
-With Fleet Management unlocked, you no longer create a workspace for every single cluster. Instead, you create Workspaces based on environments (e.g., `production-fleet`) and group multiple CAPI workload clusters inside them.
+By applying these manifests to the NKP Management cluster, NKP will automatically federate the Projects down to the attached workload clusters, creating namespaces, setting up RoleBindings, and applying Resource Quotas.
 
 ---
 
 ## 🚀 Prerequisites
 *   A running **NKP Management Cluster** (Pro or Ultimate License).
+*   Workload clusters already attached to the `production-fleet` and `development-fleet` Workspaces.
 *   `kubectl` configured and pointing to your **NKP Management Cluster**.
 *   `flux` CLI installed locally.
 *   This branch pushed to your Git repository.
@@ -23,59 +24,58 @@ With Fleet Management unlocked, you no longer create a workspace for every singl
 export GITHUB_TOKEN="<your-github-pat>"
 export GITHUB_USER="<your-github-username>"
 export REPO_NAME="nkp-gitops-demo"
-export TARGET_BRANCH="infra-pro-ultimate"
+export TARGET_BRANCH="tenancy-pro-ult/v1.0"
 
 ```
 
 ### 2. Bootstrap Flux and Create Git Source
 
 ```bash
-kubectl create namespace nkp-infra-gitops
+kubectl create namespace nkp-tenancy-gitops
 
 flux create secret git github-auth \
   --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
   --username=${GITHUB_USER} \
   --password=${GITHUB_TOKEN} \
-  --namespace=nkp-infra-gitops
+  --namespace=nkp-tenancy-gitops
 
-flux create source git nkp-infra-repo \
+flux create source git nkp-tenancy-repo \
   --url=https://github.com/${GITHUB_USER}/${REPO_NAME}.git \
   --branch=${TARGET_BRANCH} \
   --secret-ref=github-auth \
-  --namespace=nkp-infra-gitops
+  --namespace=nkp-tenancy-gitops
 
 ```
 
-### 3. Deploy the Fleets
-As soon as you create these Kustomizations, Flux will instruct the CAPI controllers on the Manager cluster to provision these VMs on Nutanix AHV.
+### 3. Deploy the Projects
+When you apply these Kustomizations, NKP will create the Project namespaces on the matching workload clusters in the fleet.
 
 ```bash
-# Sync Production Fleet (us-east and us-west)
-flux create kustomization nkp-production-fleet-sync \
-  --source=GitRepository/nkp-infra-repo \
+# Sync Production Tenancy (Frontend & Backend teams)
+flux create kustomization nkp-production-tenancy-sync \
+  --source=GitRepository/nkp-tenancy-repo \
   --path="./clusters/pro-ultimate/workspaces/production-fleet" \
   --prune=true \
   --interval=10m \
-  --namespace=nkp-infra-gitops
+  --namespace=nkp-tenancy-gitops
 
-# Sync Development Fleet
-flux create kustomization nkp-development-fleet-sync \
-  --source=GitRepository/nkp-infra-repo \
+# Sync Development Tenancy (Sandbox)
+flux create kustomization nkp-development-tenancy-sync \
+  --source=GitRepository/nkp-tenancy-repo \
   --path="./clusters/pro-ultimate/workspaces/development-fleet" \
   --prune=true \
   --interval=10m \
-  --namespace=nkp-infra-gitops
+  --namespace=nkp-tenancy-gitops
 
 ```
 
 ---
 
 ## ✅ Verification
-Monitor the status of your infrastructure provisioning:
+Verify that the projects were created in your Workspaces:
 
 ```bash
-kubectl get clusters -A
-kubectl get machinedeployments -A
-kubectl get machines -A
+kubectl get projects -n production-fleet
+kubectl get projects -n development-fleet
 
 ```

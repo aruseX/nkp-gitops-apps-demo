@@ -1,36 +1,33 @@
-# NKP GitOps Infrastructure Demo (Pro / Ultimate License)
+# NKP GitOps Platform Tenancy Demo (Pro / Ultimate License)
 
 ## 📖 Overview
-Welcome to the NKP Pro/Ultimate Infrastructure GitOps Demo! 
+Welcome to the NKP Platform Tenancy GitOps Demo! 
 
-When you upgrade from NKP Starter to **NKP Pro or Ultimate**, you unlock **Fleet Management**. This repository demonstrates how to architect your GitOps repository to manage fleets of clusters at scale.
+This branch demonstrates the responsibilities of a **Platform Administrator**. The infrastructure team has already provisioned a fleet of clusters (in another repository/branch). Your job is to create **Projects**.
 
-This branch focuses purely on **Cluster API (CAPI)** infrastructure. We have specifically separated the infrastructure provisioning from NKP Projects (Tenancy) to demonstrate how the Infrastructure team's responsibilities can be cleanly isolated into their own repository or branch.
+In NKP, a `Project` is a multi-tenant boundary. It carves out isolated namespaces and manages RBAC across an *entire fleet of clusters* simultaneously.
 
 ---
 
 ## 🗂️ Repository Structure
 
-In Pro/Ultimate, a Workspace is a 1-to-Many boundary. Notice how the `production-fleet` workspace manages multiple clusters simultaneously under the `pro-ultimate` directory.
+Notice that there are no `Cluster` or `MachineDeployment` files here. We are purely managing access for our development teams (Frontend and Backend).
 
     .
     ├── README.md                               # You are here!
     ├── demo-runbook.md                         # Step-by-step instructions
     └── clusters/
         └── pro-ultimate/
-            ├── manager/
-            │   ├── cluster.yaml                # CAPI definition of the Manager
-            │   └── kustomization.yaml              
             └── workspaces/
                 ├── production-fleet/
-                │   ├── cluster-us-east.yaml    # Prod East Cluster
-                │   ├── cluster-us-west.yaml    # Prod West Cluster
-                │   └── kustomization.yaml      # Syncs the entire Prod fleet
+                │   ├── project-frontend.yaml   # Creates 'frontend' namespaces across the prod fleet
+                │   ├── project-backend.yaml    # Creates 'backend' namespaces across the prod fleet
+                │   └── kustomization.yaml      # Syncs the Prod tenancy configs
                 └── development-fleet/
-                    ├── cluster-dev-sandbox.yaml# Dev Sandbox Cluster
-                    └── kustomization.yaml      # Syncs the Dev fleet
+                    ├── project-sandbox.yaml    # Creates sandbox namespaces for devs
+                    └── kustomization.yaml      # Syncs the Dev tenancy configs
 
 ---
 
 ## 🧭 Next Steps
-Check out the `demo-runbook.md` in this directory to see the exact commands for syncing these fleets to your NKP Management cluster!
+Check out the `demo-runbook.md` in this directory to see how to sync these Projects to your NKP Management cluster!
