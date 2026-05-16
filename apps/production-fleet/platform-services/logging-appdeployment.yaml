@@ -1,0 +1,14 @@
+apiVersion: apps.kommander.mesosphere.io/v1alpha3
+kind: AppDeployment
+metadata:
+  name: logging-operator
+  # We deploy Platform Services to the WORKSPACE namespace, not the Project namespace!
+  namespace: production-fleet
+spec:
+  appRef:
+    name: logging-operator-0.4.5 # This references the built-in NKP ClusterApp version
+    kind: ClusterApp
+  # Optional: You can use a clusterSelector if you only want logging on specific clusters in the fleet
+  # clusterSelector:
+  #   matchLabels:
+  #     logging-enabled: "true"

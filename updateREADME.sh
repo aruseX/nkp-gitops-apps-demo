@@ -1,3 +1,53 @@
+#!/bin/bash
+
+# -------------------------------------------------------------------------
+# 1. FRONTEND TEAM README
+# -------------------------------------------------------------------------
+cat << 'EOF' > apps/production-fleet/frontend-team/README.md
+# 🎨 Frontend Team Application
+
+This folder simulates a developer repository for the "Frontend Team". Developers using NKP do not need to know about infrastructure, virtual machines, or multiple clusters. They only care about deploying their code to their assigned Project namespace.
+
+### Files in this directory:
+*   **`podinfo-helm-release.yaml`**: Contains a standard Flux `HelmRepository` and `HelmRelease`. It tells Flux to pull the `podinfo` chart and deploy it into the `frontend-team` namespace.
+*   **`kustomization.yaml`**: The standard Kustomize entrypoint used by Flux to sync these files.
+
+**The NKP Magic:** Because these files are synced to a Project namespace on the Management Cluster, NKP's Federation controllers will automatically wrap this application and push it down to every workload cluster attached to this Project!
+EOF
+
+# -------------------------------------------------------------------------
+# 2. BACKEND TEAM README
+# -------------------------------------------------------------------------
+cat << 'EOF' > apps/production-fleet/backend-team/README.md
+# 🗄️ Backend Team Application
+
+This folder simulates a developer repository for the "Backend Team". Just like the frontend team, they only need to deploy to their specific namespace.
+
+### Files in this directory:
+*   **`redis-helm-release.yaml`**: Contains a Flux `HelmRepository` and `HelmRelease` pointing to the Bitnami Redis chart. It deploys to the `backend-team` namespace.
+*   **`kustomization.yaml`**: The standard Kustomize entrypoint.
+
+By isolating the backend team into their own Project namespace, we ensure they have their own RBAC, Resource Quotas, and network boundaries, all federated across the fleet.
+EOF
+
+# -------------------------------------------------------------------------
+# 3. PLATFORM SERVICES README
+# -------------------------------------------------------------------------
+cat << 'EOF' > apps/production-fleet/platform-services/README.md
+# 🛠️ Platform Services (Day 2 NKP Apps)
+
+This folder belongs to the **Platform Administrator**. Unlike developers who deploy custom Helm charts to Project namespaces, Platform Admins deploy pre-packaged NKP Day-2 services (like Logging, Monitoring, and Gatekeeper) to **Workspace namespaces**.
+
+### Files in this directory:
+*   **`logging-workspace.yaml`**: An NKP `AppDeployment` resource. Because it has no `clusterSelector`, NKP will automatically deploy the Logging Operator to **every cluster** in the `production-fleet` workspace.
+*   **`gatekeeper-cluster-specific.yaml`**: An NKP `AppDeployment` resource for security policies. Because this file *does* include a `clusterSelector` matching `prod-us-east`, NKP will **only** install Gatekeeper on that specific cluster.
+*   **`kustomization.yaml`**: The entrypoint used by Flux to sync these Platform Services.
+EOF
+
+# -------------------------------------------------------------------------
+# 4. UPDATED DEMO RUNBOOK (With Summaries)
+# -------------------------------------------------------------------------
+cat << 'EOF' > demo-runbook.md
 # NKP Federated Apps & Services GitOps Runbook
 
 ## 📖 Overview
@@ -104,3 +154,6 @@ kubectl --context=prod-us-east get pods -n frontend-team
 kubectl --context=prod-us-west get pods -n frontend-team
 
 ```
+EOF
+
+echo "✅ Success! Sub-directory READMEs generated and demo-runbook.md updated!"

@@ -1,0 +1,14 @@
+apiVersion: apps.kommander.mesosphere.io/v1alpha3
+kind: AppDeployment
+metadata:
+  name: gatekeeper
+  namespace: production-fleet
+spec:
+  appRef:
+    name: gatekeeper-3.11.1
+    kind: ClusterApp
+  # The clusterSelector targets a specific CAPI cluster within the workspace.
+  # NKP automatically labels all attached clusters with their name!
+  clusterSelector:
+    matchLabels:
+      kommander.mesosphere.io/cluster-name: prod-us-east

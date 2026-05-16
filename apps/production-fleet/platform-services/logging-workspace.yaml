@@ -1,0 +1,11 @@
+apiVersion: apps.kommander.mesosphere.io/v1alpha3
+kind: AppDeployment
+metadata:
+  name: logging-operator
+  namespace: production-fleet
+spec:
+  # Deploying to the workspace namespace without a clusterSelector
+  # tells NKP to install this on EVERY cluster in the production-fleet (us-east and us-west)
+  appRef:
+    name: logging-operator-0.4.5
+    kind: ClusterApp
