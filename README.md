@@ -26,6 +26,13 @@ Information Assurance (IA), Cyber Security, and Network Security teams love codi
 When your entire infrastructure, tenancy, and application layer is codified across Git repositories, your Disaster Recovery strategy is built-in.
 * **RTO in Minutes, Not Weeks:** If a datacenter burns down or a cluster is irrevocably compromised, you don't need a massive runbook to rebuild it. Cluster API (CAPI) provisions the new VMs, NKP attaches the cluster to the Workspace, and Flux instantly pulls down every Platform Service, Security Policy, and Application required. The cluster rebuilds itself exactly as it was.
 
+### 💾 Complete Stateful Disaster Recovery with NDK
+While GitOps perfectly handles the disaster recovery of your infrastructure, tenancy boundaries, and stateless application configurations—what about your persistent data? 
+* **The Missing Link:** A platform that rebuilds in minutes with GitOps is incredible, but if your databases and stateful workloads lost their Persistent Volumes, your business is still down.
+* **Enter Nutanix Data Services for Kubernetes (NDK):** NDK complements this GitOps architecture by providing enterprise-grade snapshotting, replication, and disaster recovery for your stateful Kubernetes workloads.
+* **The Ultimate DR Strategy:** By combining the codified platform recovery of NKP with the stateful data replication of NDK, you achieve comprehensive, near-zero RTO/RPO for your entire stack. 
+* **Next Steps:** *Contact your Nutanix account team to learn more about integrating NDK into your NKP environment!*
+
 ---
 
 ## 🌿 Repository Branches
