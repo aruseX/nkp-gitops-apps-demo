@@ -1,0 +1,8 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: nkp-manager-cluster
+  namespace: default
+spec:
+  # This is a placeholder. Typically, the manager cluster is bootstrapped via the NKP CLI.
+  # Representing it here allows you to manage its configuration/addons via GitOps post-creation.

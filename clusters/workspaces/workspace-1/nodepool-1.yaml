@@ -1,0 +1,8 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: prod-nodepool
+  namespace: workspace-1
+spec:
+  clusterName: prod-workload-cluster
+  replicas: 5 # Prod needs more workers!
